@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Game Board</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.js"></script>
+    <script>
+        var socket = io();
+        socket.on('connect', function() {
+            console.log('Connected as Board!');
+            socket.emit('connect_table');  // Request the community cards upon connection
+        });
+
+        socket.on('message', function(data) {
+            console.log(data.message);
+            document.getElementById('gameStatus').innerText = data.message;
+        });
+        
+        socket.on('update_community_cards', function(data) {
+            console.log('Community Cards:', data.cards);
+            document.getElementById('communityCards').innerText = 'Community Cards: ' + data.cards.join(', ');
+
+            data.cards.forEach((card, index) => {
+                const cardImg = document.getElementById(`card${index+1}`);
+                cardImg.src = `/static/cards_png/${card}`;
+                cardImg.alt = card;
+            });
+        });
+
+        socket.on('log_update', function(data) {
+            let logs = data.logs.join('<br>');
+            document.getElementById('logArea').innerHTML = logs;
+        });
+
+
+        function startGame() {
+            socket.emit('start_game');
+        }
+        function dealCards() {
+            socket.emit('deal_cards');
+        }
+    </script>
+</head>
+<body>
+    <h1>Game Board</h1>
+    <button onclick="startGame()">Start Game</button>
+    <button onclick="dealCards()">Deal Cards</button>
+    <p id="gameStatus"></p>
+    <p id="communityCards"></p>
+    <div id="communityCards">
+        <img id="card1" width="250" alt="Card 1">
+        <img id="card2" width="250" alt="Card 2">
+        <img id="card3" width="250" alt="Card 3">
+        <img id="card4" width="250" alt="Card 4">
+        <img id="card5" width="250" alt="Card 5">
+    </div>
+    <h2>log</h2>
+    <p id="log_update"></p>
+</body>
+</html>

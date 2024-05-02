@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Card Game</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.js"></script>
+    <script>
+        var socket = io();
+
+        socket.on('connect', function() {
+            console.log('connected to server.');
+            socket.emit('join_game'); // Join the game  
+        });
+
+        socket.on('disconnect', function() {
+            console.log('Disconnected from server.');
+            // socket.emit('leave_game');
+            // Optionally try to reconnect or notify the user
+        });
+
+        socket.on('message', function(data) {
+            console.log(data.message);
+            document.getElementById('gameStatus').innerText = data.message;
+        });
+
+        socket.on('log_update', function(data) {
+            let logs = data.logs.join('<br>');
+            document.getElementById('logArea').innerHTML = logs;
+        });
+
+        socket.on('deal_cards', function(data) {
+            console.log('Received cards:', data.cards);
+            document.getElementById('yourCards').innerText = 'Player 1 hand: ' + data.cards.join(', ');
+        
+            data.cards.forEach((card, index) => {
+                const cardImg = document.getElementById(`card${index+1}`);
+                cardImg.src = `/static/cards_png/${card}`;
+                cardImg.alt = card;
+            });
+        
+        });
+
+        function joinGame() {
+            socket.emit('join_game');
+        }
+        
+        function updateBetValue() {
+            const betAmount = document.getElementById('betAmount').value;
+            document.getElementById('betValue').textContent = betAmount;
+        }
+
+        function placeBet() {
+            const amount = document.getElementById('betAmount').value;
+            const betValue = document.getElementById('betValue').textContent;
+
+            // Assuming you have a socket variable initialized for socket.io
+            socket.emit('place_bet', { amount: parseInt(amount) });
+
+            // Optionally, you can update the bet value in the UI after placing the bet
+            // document.getElementById('betValue').textContent = amount;
+        }
+
+        function checkGame() {
+            socket.emit('check_game');
+        }
+        function foldGame() {
+            socket.emit('fold_game');
+        }
+
+        function sendChatMessage() {
+            var message = document.getElementById('chatInput').value;
+            socket.emit('send_chat_message', {'message': message});
+            document.getElementById('chatInput').value = ''; // Clear input field
+        }
+
+        socket.on('receive_chat_message', function(data) {
+            var chatBox = document.getElementById('chatBox');
+            chatBox.innerHTML += '<p>' + data.message + '</p>'; // Display received message
+        });
+
+    </script>
+</head>
+<body>
+    <h1>Beyond Poker</h1>
+     
+    <p id="gameStatus"></p>
+
+    <p id="yourCards"></p>
+    
+    <div>
+        <button onclick="checkGame()">Check</button>
+        <button onclick="foldGame()">Fold</button>
+        <button onclick="placeBet()">Bet</button>
+        <input type="range" id="betAmount" min="0" max="200" step="5" value="10" oninput="updateBetValue()">
+        <label for="betAmount">Bet Amount:</label>
+        <span id="betValue">10</span>
+    </div>
+    <div id="Cards">
+        <img id="card1" alt="Card 1" width="250" src="static/cards_png/empty.png">
+        <img id="card2" alt="Card 2" width="250" src="static/cards_png/empty.png">
+    </div>
+    <input type="text" id="chatInput">
+    <button onclick="sendChatMessage()">Send</button>
+    <div id="chatBox"></div>
+
+    <h2>log</h2>
+    <p id="log_update"></p>
+</body>
+</html>
+
