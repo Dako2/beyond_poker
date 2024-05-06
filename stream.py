@@ -6,7 +6,6 @@ from io import BytesIO
 import base64
 
 # Assuming your Avatar class is defined here
-
 async def audio_stream(websocket):
     # Define a callback function to capture audio chunks
     def callback(indata, frames, time, status):
