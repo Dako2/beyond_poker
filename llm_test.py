@@ -1,143 +1,228 @@
-"""
-**Prompt Generation f
-https://www.youtube.com/watch?v=nGnT7f7V-iE
-"""
-# Set up OpenAI API key
 import openai
-import os 
-import requests
-from llama_index.core.chat_engine import SimpleChatEngine
+import os
 from urllib.parse import quote
-from game_engine import Game
 
-from llama_index.agent.openai import OpenAIAgent
+import logging
+import sys
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
+import random
 import json
 from typing import Sequence, List
+
+from llama_index.agent.openai import OpenAIAgent
+from llama_index.core.indices.struct_store import JSONQueryEngine
 
 from llama_index.llms.openai import OpenAI
 from llama_index.core.llms import ChatMessage
 from llama_index.core.tools import BaseTool, FunctionTool
+from llama_index.core import PromptTemplate
 from openai.types.chat import ChatCompletionMessageToolCall
-import nest_asyncio
 
-import base64
-import requests
+from termcolor import colored  
+import openai
+from tts_openai import tts_openai_replay, tts_openai_to_wav_files
+
+from prompt import TEXAS_HOLDEM_PLAYER
+from typing import List
+from pydantic import BaseModel
+
+import nest_asyncio
+nest_asyncio.apply()
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
 
-TEXAS_HOLDEM_ASSISTANT = """Your name is Eliza, a professional poker game player. you play and teach the game with the Player1. You are provided with a game context and make an action correspondingly
-
-Example: 
-A game start with your hands: Ace of Spades, and 2 of Spades. The user got his hand also. Now it's pre-flop. You made the move and throw a comment to ask the user to make his move (call, fold, raise) if the user doesn't know how to. 
-The game has community cards of 2 of Clubs, Ace of Diamonds, and 10 of Clubs. 
-"""
-nest_asyncio.apply()
-
-def send_cards_api(cards, base_url='http://localhost:3002'):
-    try:
-        url = f"{base_url}/deal_cards"
-        # Ensure the payload is structured as expected by the server
-        payload = {'data': cards}
-        # Send the POST request with JSON data
-        response = requests.post(url, json=payload)
-        
-        # Check if the request was successful
-        if response.status_code == 200:
-            print("Cards sent successfully!")
-            print("Response:", response.json())
-        else:
-            print("Failed to send cards. Status code:", response.status_code)
-            print("Response text:", response.text)  # Additional debug information
-    except Exception as e:
-        print("An error occurred:", e)
-
-def send_chat_message(base_url, message):
-    try:
-        url = f"{base_url}/chat"
-        # Send the POST request with JSON data
-        response = requests.post(url, json={'message': message})
-        # Check if the request was successful
-        if response.status_code == 200:
-            print("Message sent successfully!")
-            print("Response:", response.json())
-        else:
-            print("Failed to send message. Status code:", response.status_code)
-    except Exception as e:
-        print("An error occurred:", e)
-
-def send_chat_message_from_url_input(base_url, message):
-    try:
-        # Encode the message to handle special characters
-        encoded_message = quote(message)
-        # Construct the URL with the encoded message
-        url = f"{base_url}/chat_input/{encoded_message}"
-        # Send the GET request
-        response = requests.get(url)
-        # Check if the request was successful
-        if response.status_code == 200:
-            print("Message sent successfully!")
-            print("Response:", response.json())
-        else:
-            print("Failed to send message. Status code:", response.status_code)
-    except Exception as e:
-        print("An error occurred:", e)
-
-def multiply(x, y):
-    """Multiple two integers and returns the result integer"""
-    return x * y
-multiply_tool = FunctionTool.from_defaults(fn=multiply)
-
-def add(x, y):
-    """Add two integers and returns the result integer"""
-    return x + y
-add_tool = FunctionTool.from_defaults(fn=add)
-
-def extract_current_game_state():
-    """extract the current game state from the game engine"""
-    return game.get_game_state()
-extract_current_game_state_tool = FunctionTool.from_defaults(fn=extract_current_game_state)
-
-
-
-
-llm = OpenAI(model="gpt-3.5-turbo-0613", max_tokens=150, temperature=0.9)
-game = Game(num_players = 2)
-
-game.add_player(1)
-game.start_game()
-
-agent = OpenAIAgent.from_tools(
-    [multiply_tool, add_tool, extract_current_game_state_tool],
-    llm=llm,
-    verbose=True,
-    system_prompt=TEXAS_HOLDEM_ASSISTANT,
-)
-
-# Define the base URL where the Flask app is running
-base_url = 'http://localhost:3001'
-
-# Example usage
-#send_chat_message_from_url_input(base_url, 'hello! how are you doing? ')
-
-game_summary = game.log
-
-response = agent.chat(
-    str(game_summary)
-)
-
-while True:
-    user_input = input("Please enter your query (or 'exit' to quit): ").strip().lower()
-    if user_input == 'exit':
-        print("Exiting...")
-        break
+def pretty_print_conversation(messages):
+    role_to_color = {
+        "system": "red",
+        "user": "green",
+        "assistant": "blue",
+        "function": "magenta",
+    }
     
-    response = agent.chat(
-        user_input
-    )
-    print(response)
+    for message in messages:
+        if message["role"] == "system":
+            print(colored(f"system: {message['content']}\n", role_to_color[message["role"]]))
+        elif message["role"] == "user":
+            print(colored(f"user: {message['content']}\n", role_to_color[message["role"]]))
+        elif message["role"] == "assistant" and message.get("function_call"):
+            print(colored(f"assistant: {message['function_call']}\n", role_to_color[message["role"]]))
+        elif message["role"] == "assistant" and not message.get("function_call"):
+            print(colored(f"assistant: {message['content']}\n", role_to_color[message["role"]]))
+        elif message["role"] == "function":
+            print(colored(f"function ({message['name']}): {message['content']}\n", role_to_color[message["role"]]))
 
-    #tts.synthesize_text(response.response)
-    send_chat_message(base_url, response.response)
+class GameAction(BaseModel):
+    """Data model for game actions, including bet, fold, call, raise, and check. if bet, then assign the amount of betting."""
+    action: str
+    amount: int = 0
+
+def function_to_tool(func):
+    func_tool = FunctionTool.from_defaults(fn=func)
+    return func_tool
+
+class LLMPlayer():
+    def __init__(self, id, name, chips=1000, autobot = True):
+        self.id = id
+        self.name = name
+        self.hand_str = []
+        self.hand = []
+        self.hand_int = []
+
+        self.chips = chips
+        self.current_bet = 0
+        self.all_in = False
+
+        self.in_game = True  # True if the player hasn't folded
+        self.autobot = autobot
+
+        self.log = ""
+        self.action = ""
+    
+        self.llm = OpenAI(model="gpt-3.5-turbo-0613", max_tokens=75, temperature=0.9)
+        
+        self.agent = OpenAIAgent.from_tools(
+            [],
+            llm=self.llm,
+            verbose=True,
+            system_prompt=TEXAS_HOLDEM_PLAYER,
+        )
+        self.tools_list = [self.bet, self.fold, self.call, self.allin, self.check]
+
+        self.fmt_prompt = ""
+
+    def logging(self, log_str):
+        self.log += log_str
+        self.action = log_str
+
+    def update_prompt_template(self, action, content, knowing_game_state_str, knowing_game_history_str):
+        query_prompt_tmpl_str = """\
+Your hand is: {hand_str}, The game is in the state: {game_state_str}.\
+Then, You have decided to make a move:{action}, and provide the response based on this move (maybe also based on the game history).\n
+===========Game History============\n
+{history_str}
+"""
+        query_prompt_tmpl_str = PromptTemplate(query_prompt_tmpl_str)
+
+        self.fmt_prompt = query_prompt_tmpl_str.format(
+            hand_str=self.get_hand_str(),
+            game_state_str=knowing_game_state_str,
+            history_str=knowing_game_history_str,
+            content=content,
+            action=action,
+            )
+        print(self.fmt_prompt)
+
+    def renew_function_calling_tools(self, tools_list):
+        if not tools_list:
+            self.agent = OpenAIAgent.from_tools(
+                [function_to_tool(x) for x in tools_list],
+                llm=self.llm,
+                verbose=True,
+                system_prompt=TEXAS_HOLDEM_PLAYER,
+            )
+            print(f"renew_function_calling_tools:{tools_list}")
+
+    def query_action(self, content, game_state="", game_history="", source="user"):
+        if self.autobot:
+            self.action = random.choice(['check', 'call', 'bet'])
+            if self.action == 'bet':
+                self.action += str(random.randrange(5, int(self.chips//2), 5))
+            
+            return self.action
+        
+        if source == "game_engine":
+            self.action = random.choice(['fold','check', 'call', 'bet'])
+            if self.action == 'bet':
+                self.action += str(random.randrange(5, int(self.chips), 5))
+            self.update_prompt_template(self.action, content, game_state, game_history)
+            print(self.fmt_prompt)
+            response = self.agent.chat(self.fmt_prompt)
+            tts_openai_replay(response.response)
+
+            print("xxxx")
+            print(response.response)
+            print("xxxx")
+            return response.response
+        elif source == "review":
+            content = "this is a review of the hand power of the player:\n"+content
+            content += "\n Give a feedback based by comparing the hand power with the real game history:\n"
+            response = self.agent.chat(content)
+            tts_openai_replay(response.response)
+            print("xxxx")
+            print(response.response)
+            print("xxxx")
+            return response.response
+        else:
+            response = self.agent.chat(content, tool_choice="auto")
+            tts_openai_replay(response.response)
+            return response.response
+   
+    def get_hand_str(self,):
+        return str(self.hand_str)
+
+    def get_game_str(self,game):
+        return game.game_state
+
+    def get_game_hisotry_str(self,game):
+        return game.game_history
+
+    def bet(self, amount):
+        """raise the bet by the given amount."""
+        if amount <= self.chips:
+            self.chips -= amount
+            self.current_bet += amount
+            self.logging(f"{self.name} bet additional {amount} with current total bet of {self.current_bet}\n")
+            self.amount = amount
+            self.action = f"bet{self.amount}"
+            print(f"{self.name}--------=++++++++++++++=-------- {self.action} --------=++++++++++++++=--------")
+            return True
+        else:
+            self.amount = self.chips
+            self.current_bet += self.amount
+            self.chips -= self.amount
+            self.action = f"allin"
+            print(f"{self.name}--------=++++++++++++++=-------- {self.action} --------=++++++++++++++=--------")
+        
+            return True
+    
+    def allin(self,):
+        """all in the current bet."""
+        if self.bet(self.chips):
+            self.logging(f"{self.name} all in!\n")
+            self.action = "allin"
+        print(f"{self.name}--------=++++++++++++++=-------- {self.action} --------=++++++++++++++=--------")
+
+    def fold(self):
+        """fold the game."""
+        self.in_game = False
+        self.action = "fold"
+        print(f"{self.name}--------=++++++++++++++=-------- {self.action} --------=++++++++++++++=--------")
+        
+
+    def call(self):
+        """call the current bet."""
+        self.action = "call"
+        print(f"{self.name}--------=++++++++++++++=-------- {self.action} --------=++++++++++++++=--------")
+
+
+    def check(self):
+        """check the current hand."""
+        self.action = "check"
+        print(f"{self.name}--------=++++++++++++++=-------- {self.action} --------=++++++++++++++=--------")
+
+    def get_updates(self, game_updates = ""):
+        return game_updates
+    
+if __name__ == '__main__':
  
-
+    eliza = LLMPlayer(1, 'Eliza', autobot=True)
+    while True:
+        user_input = input("Please enter your query (or 'exit' to quit): ").strip().lower()
+        if user_input == 'exit':
+            print("Exiting...")
+            break
+        response = eliza.query_action(user_input, "", "", source="user")
+        tts_openai_replay(response)
+ 
  

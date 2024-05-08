@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cookie Bet Game</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+        }
+        #header {
+            width: 100%;
+            padding: 10px;
+            background: #333;
+            color: #fff;
+            text-align: center;
+        }
+        #gameArea {
+            display: flex;
+            flex-grow: 1;
+            width: 100%;
+        }
+        #sidebar {
+            width: 200px;
+            background: #f0f0f0;
+            padding: 20px;
+            box-shadow: -1px 0 5px rgba(0,0,0,0.2);
+        }
+        #mainContent {
+            flex-grow: 1;
+            padding: 20px;
+        }
+        .infoBox {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #ddd;
+            border-radius: 5px;
+        }
+        .messageBox {
+            height: 150px;
+            overflow-y: auto;
+            background: #eee;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .menu-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+        }
+
+        #mainButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .menu {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform: scale(0);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .menu.hidden {
+            visibility: hidden;
+        }
+
+        .sub-button {
+            position: absolute;
+            width: 50px; /* Adjust size as needed */
+            height: 50px; /* Adjust size as needed */
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .sub-button:nth-child(1) { transform: translate(-100px, 0); }
+        .sub-button:nth-child(2) { transform: translate(100px, 0); }
+        .sub-button:nth-child(3) { transform: translate(0, -100px); }
+
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>Cookie Bet Game</h1>
+    </div>
+    <div class="menu-container">
+        <button id="mainButton">Options</button>
+        <div class="menu hidden">
+            <button class="sub-button">Option 1</button>
+            <button class="sub-button">Option 2</button>
+            <button class="sub-button">Option 3</button>
+        </div>
+    </div>
+
+    <div id="gameArea">
+        <div id="sidebar">
+            <div class="infoBox">
+                <strong>Chips:</strong> <span id="playerChips">1000</span>
+            </div>
+            <div class="infoBox">
+                <strong>Current Bet:</strong> <span id="playerCurrentBet">0</span>
+            </div>
+            <div class="infoBox">
+                <strong>Game Status:</strong> <span id="gameStatus">Waiting for next round...</span>
+            </div>
+            <div class="infoBox">
+                <strong>Game Status:</strong> <span id="pot">0</span>
+            </div>
+        </div>
+        <div id="mainContent">
+            <div class="messageBox" id="gameMessages">
+                <!-- Messages will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.js"></script>
+    <script>
+        document.getElementById('mainButton').addEventListener('click', function() {
+            var menu = document.querySelector('.menu');
+            if (menu.classList.contains('hidden')) {
+                menu.classList.remove('hidden');
+                setTimeout(function() {
+                    menu.style.transform = 'scale(1)';
+                }, 10); // Short delay to trigger CSS transition
+            } else {
+                menu.style.transform = 'scale(0)';
+                setTimeout(function() {
+                    menu.classList.add('hidden');
+                }, 300); // Match the duration of the CSS transition
+            }
+        });
+
+        // Optional: add mouseover or touch events to sub-buttons for immediate action
+        document.querySelectorAll('.sub-button').forEach(function(button) {
+            button.addEventListener('mouseover', function() {
+                console.log('Option selected:', this.textContent);
+                // Close menu
+                var menu = document.querySelector('.menu');
+                menu.style.transform = 'scale(0)';
+                setTimeout(function() {
+                    menu.classList.add('hidden');
+                }, 300);
+            });
+        });
+
+    </script>
+</body>
+</html>

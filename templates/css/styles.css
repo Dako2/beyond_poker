@@ -1,0 +1,65 @@
+.vertical-slider {
+    height: 100%; /* Adjust to fit within the parent container */
+    writing-mode: bt-lr; /* Make the slider vertical */
+    transform: rotate(90deg); /* Rotate the slider to correct orientation */
+}
+
+
+.col-3.d-flex.align-items-center {
+    height: auto; /* Set the height to auto */
+}
+
+.d-flex {
+    display: flex;
+    flex-wrap: nowrap;  // Allows items to wrap if needed
+    justify-content: center;  // Centers items horizontally
+    align-items: center;  // Centers items vertically
+    width: 100%;  // Ensures the flex container takes full width of its parent
+}
+
+.card-img {
+    width: 100px;  /* Default smaller width for mobile devices */
+    height: 140px;  /* Default smaller height for mobile devices */
+    margin: 5px;  /* Smaller margin for tighter spaces */
+    background: #eee;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2rem;
+}
+
+@media (min-width: 768px) {
+    .card-img {
+        width: 150px;
+        height: 220px;
+        margin: 10px;
+    }
+}
+
+.full-width {
+    width: 100%; /* Full width */
+}
+.game-info {
+    font-size: 0.9rem;
+    text-align: left;
+    margin-bottom: 10px;
+    margin-top: 10px;
+}
+.btn-square {
+    width: 100%; /* Adjust width to 100% of the column */
+    height: 300px; /* Height equal to width for square appearance */
+    margin-bottom: 10px;
+    margin-top: 10px;
+    font-size: 1.2em;
+}
+.btn-fold {
+    height: 150px; /* Slightly taller */
+    margin-bottom: 10px; /* Adds spacing below the Fold button */
+    margin-top: 10px;
+}
+.btn-all-in {
+    height: 100px; /* Slightly shorter */
+    margin-bottom: 10px; /* Adds spacing below the Fold button */
+    margin-top: 10px;
+}

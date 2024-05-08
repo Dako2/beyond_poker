@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cookie Bet Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+        }
+        #header {
+            width: 100%;
+            padding: 10px;
+            background: #333;
+            color: #fff;
+            text-align: center;
+        }
+        #gameArea {
+            display: flex;
+            flex-grow: 1;
+            width: 100%;
+        }
+        #sidebar {
+            width: 200px;
+            background: #f0f0f0;
+            padding: 20px;
+            box-shadow: -1px 0 5px rgba(0,0,0,0.2);
+        }
+        #mainContent {
+            flex-grow: 1;
+            padding: 20px;
+        }
+        .infoBox {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #ddd;
+            border-radius: 5px;
+        }
+        .messageBox {
+            height: 150px;
+            overflow-y: auto;
+            background: #eee;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.js"></script>
+    <script>
+        var socket = io();
+
+        socket.on('connect', function() {
+            console.log('connected to server.');
+            socket.emit('join_game'); // Join the game  
+        });
+
+        socket.on('disconnect', function() {
+            console.log('Disconnected from server.');
+            // socket.emit('leave_game');
+            // Optionally try to reconnect or notify the user
+        });
+
+        socket.on('message', function(data) {
+            console.log(data.message);
+            document.getElementById('gameStatus').innerText = data.message;
+        });
+
+        socket.on('update_game', function(data) {
+            console.log('Received game state:', data);
+            
+        });
+            
+        socket.on('log_update', function(data) {
+            let logs = data.logs.join('<br>');
+            document.getElementById('logArea').innerHTML = logs;
+        });
+
+        socket.on('deal_cards', function(data) {
+            console.log('Received cards:', data.cards);
+            document.getElementById('yourCards').innerText = 'Player 1 hand: ' + data.cards.join(', ');
+        
+            data.cards.forEach((card, index) => {
+                const cardImg = document.getElementById(`card${index+1}`);
+                cardImg.src = `/static/cards_png/${card}`;
+                cardImg.alt = card;
+            });
+        
+        });
+
+        function joinGame() {
+            socket.emit('join_game');
+        }
+
+        function performAction(action) {
+            console.log(`Performing action: ${action}`);
+            if (action === 'bet') {
+                const amount = document.getElementById('betAmount').value;
+                console.log(`Betting amount: ${amount}`);
+                socket.emit('action', { action: 'bet', amount: parseInt(amount) });
+            } else {
+                socket.emit('action', { action: action });
+            }
+        }
+
+        function toggleActionMenu() {
+            const menu = document.getElementById('actionMenu');
+            menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
+            console.log('Toggling action menu:', menu.style.display);
+        }
+
+        function updateBetValue() {
+            const betAmount = document.getElementById('betAmount').value;
+            document.getElementById('betValue').textContent = betAmount;
+            console.log('Updated bet amount to:', betAmount);
+        }
+
+        function sendChatMessage() {
+            var message = document.getElementById('chatInput').value;
+            socket.emit('send_chat_message', {'message': message});
+            document.getElementById('chatInput').value = ''; // Clear input field
+        }
+
+        socket.on('receive_chat_message', function(data) {
+            var chatBox = document.getElementById('chatBox');
+            chatBox.innerHTML += '<p>' + data.message + '</p>'; // Display received message
+        });
+
+        socket.on('update', function(data) {
+            document.getElementById('playerChips').textContent = data.chips;
+            document.getElementById('playerCurrentBet').textContent = data.current_bet;
+            document.getElementById('gameStatus').textContent = data.game_status;
+            document.getElementById('pot').textContent = data.pot;
+            document.getElementById('playerAction').textContent = data.playerAction;
+            let messages = data.messages.join('<br>');
+            document.getElementById('gameMessages').innerHTML = data.gameMessages;
+        });
+
+        window.addEventListener("orientationchange", function() {
+            if (window.orientation === 90 || window.orientation === -90) {
+                // Landscape orientation
+                document.body.style.backgroundColor = "lightblue";
+            } else {
+                // Portrait orientation
+                // Prompt user to switch to landscape for better experience
+                alert("For best viewing, please rotate your device to landscape.");
+            }
+        });
+
+    </script>
+</head>
+<body>
+    <h1>Beyond Poker</h1>
+    <p id="gameStatus"></p>
+    <p id="yourCards"></p>
+    <div>
+        <button onclick="toggleActionMenu()">Game Actions <i class="fas fa-caret-down"></i></button>
+        <div id="actionMenu" style="display:none;">
+            <button onclick="performAction('check')">Check</button>
+            <button onclick="performAction('fold')">Fold</button>
+            <button onclick="performAction('call')">Call</button>
+            <button onclick="performAction('bet')">Bet</button>
+            <button onclick="performAction('allin')">All-In</button>
+        </div>
+    </div>
+    <div id="Cards">
+        <img id="card1" alt="Card 1" width="250" src="static/cards_png/empty.png">
+        <img id="card2" alt="Card 2" width="250" src="static/cards_png/empty.png">
+    </div>
+    <input type="text" id="chatInput">
+    <button onclick="sendChatMessage()">Send</button>
+    <div id="chatBox"></div>
+
+    <h2>log</h2>
+    <p id="log_update"></p>
+    <div id="betSliderContainer">
+        <input type="range" id="betAmount" min="0" max="1000" step="5" value="10" oninput="updateBetValue()" orientation="vertical">
+        <label for="betAmount">Bet Amount: <span id="betValue">5</span></label>
+    </div>
+
+    <div id="gameArea">
+        <div id="sidebar">
+            <div class="infoBox">
+                <strong>Chips:</strong> <span id="playerChips">1000</span>
+            </div>
+            <div class="infoBox">
+                <strong>Current Bet:</strong> <span id="playerCurrentBet">0</span>
+            </div>
+            <div class="infoBox">
+                <strong>Game Status:</strong> <span id="gameStatus">Waiting for next round...</span>
+            </div>
+            <div class="infoBox">
+                <strong>Game Status:</strong> <span id="pot">0</span>
+            </div>
+        </div>
+        <div id="mainContent">
+            <div class="messageBox" id="gameMessages">
+                <!-- Messages will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
