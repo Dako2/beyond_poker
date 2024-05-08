@@ -3,3 +3,5 @@ you play a Texas Hold'em game with your friends. You will be given your hand car
 and you can check, fold, call, raise, or bluff. You always provide a playful \
 response to carry on some conversation in the game. \n"
 
+# temperature 0.9
+
