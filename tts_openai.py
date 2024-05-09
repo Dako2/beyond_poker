@@ -5,6 +5,9 @@ import requests
 import pyaudio
 import nltk
 from nltk.tokenize import sent_tokenize
+import time 
+from openai import OpenAI
+
 
 def tts_openai_replay(input_text, bypass=False):
     if bypass:
@@ -15,9 +18,9 @@ def tts_openai_replay(input_text, bypass=False):
         "Authorization": f'Bearer {os.getenv("OPENAI_API_KEY")}',
     }
     data = {
-        "model": "tts-1",
+        "model": "tts-1-hd", # tts-1-hd, tts-1 (for real-time, lower quality and lower latency)
         "input": input_text,
-        "voice": "shimmer",
+        "voice": "alloy",
         "response_format": "wav",
     }
 
@@ -49,7 +52,7 @@ def tts_openai_replay(input_text, bypass=False):
 if not os.path.exists("audio"):
     os.makedirs("audio")
 
-def tts_openai_to_wav_files(input_text): #return a list of wav files for inference
+def tts_openai_to_wav_files(input_text, segementation_bypass = True): #return a list of wav files for inference
     wav_files_for_inference = []
 
     url = "https://api.openai.com/v1/audio/speech"
@@ -57,7 +60,10 @@ def tts_openai_to_wav_files(input_text): #return a list of wav files for inferen
         "Authorization": f'Bearer {os.getenv("OPENAI_API_KEY")}',
     }
     # Tokenize input text into sentences
-    sentences = sent_tokenize(input_text)
+    if not segementation_bypass:
+        sentences = sent_tokenize(input_text)
+    else:
+        sentences = [input_text]
     # Print the segmented sentences
     for i, sentence in enumerate(sentences, 1):
         print(f"Sentence {i}: {sentence}")
@@ -65,7 +71,7 @@ def tts_openai_to_wav_files(input_text): #return a list of wav files for inferen
         data = {
             "model": "tts-1",
             "input": sentence,
-            "voice": "shimmer",
+            "voice": "alloy",#nova
             "response_format": "wav",
         }
 
@@ -85,7 +91,7 @@ def tts_openai_to_wav_files(input_text): #return a list of wav files for inferen
                     if not frames:
                         break
 
-                    output_filename = f"audio/Sentence_{i}_segment_{segment_index}.wav"
+                    output_filename = f"audio/Sentence_{i}_segment_{segment_index}_{str(int(time.time()))}.wav"
                     with wave.open(output_filename, 'wb') as segment_wav:
                         segment_wav.setnchannels(wf.getnchannels())
                         segment_wav.setsampwidth(wf.getsampwidth())
@@ -99,7 +105,27 @@ def tts_openai_to_wav_files(input_text): #return a list of wav files for inferen
 
     return wav_files_for_inference
 
+def tts_openai_to_wav_files_simple(input_text, i):
+    client = OpenAI()
+    speech_file_path = f"audio/{i}.wav"
+    
+    response = client.audio.speech.create(
+        model="tts-1",
+        voice="alloy",
+        input=input_text
+        )
+
+    response.stream_to_file(speech_file_path)
+
 if __name__ == '__main__':
-    input_text = "I finally had some time to come back to this and found a pretty simple solution. It’s possible to directly pass the response.raw stream into the wave.open call, which automatically deals with parsing the header and buffering chunks. "
-    #tts_openai_replay(input_text)
-    tts_openai_to_wav_files(input_text)
+    # input_text = "I finally had some time to come back to this and found a pretty simple solution. It’s possible to directly pass the response.raw stream into the wave.open call, which automatically deals with parsing the header and buffering chunks. "
+    # tts_openai_replay(input_text)
+    # tts_openai_to_wav_files(input_text)
+
+    # Open the file for reading
+    with open('tts_inputs/tts_inputs.txt', 'r') as file:
+        i = 0
+        for line in file:
+            i=i+1
+            tts_openai_to_wav_files_simple(line, i)
+

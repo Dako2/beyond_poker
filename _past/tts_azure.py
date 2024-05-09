@@ -70,3 +70,10 @@ class TextToSpeech:
 if __name__ == "__main__":
     tts = TextToSpeech()
     tts.synthesize_text("你好，欢迎来到Closeby-AI展台.", language="zh-HK")
+    tts.synthesize_text("嗨，我係珍妮！我可以幫你學點樣玩撲克。", language="zh-HK")
+    tts.synthesize_text("將你嘅手機放喺桌子上指定嘅位置。", language="zh-HK")
+    tts.synthesize_text("點擊手機上彈出嘅連結。將手機橫過嚟可以睇到更好嘅界面。", language="zh-HK")
+
+    
+    
+    
