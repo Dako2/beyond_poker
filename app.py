@@ -22,6 +22,7 @@ def board():
 @socketio.on('connect')
 def handle_connect():
     emit('gameMessage', {'message': f'joining the game...'}, room=request.sid)
+    emit('start_game')
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -45,7 +46,7 @@ def on_start_game():
     """start the game and deal the cards to all players"""
     print("starting the game")
     game.start_game()
-    
+
     human = game.players['Player 2']
     player_cards = human.hand_str
     print(player_cards)
@@ -71,7 +72,6 @@ def on_deal_community_cards():
         emit('gameStatus', {'message': f'Game #{game.game_id}, Pot Size ${game.pot}, Next move: {game.get_current_player().name}'}, broadcast=True)
     except:
         print("board not connected")
-    
     return game.community_cards
 
 @socketio.on('action')
@@ -113,10 +113,7 @@ def update_logs():
     logs = game.get_logs()
     emit('log_update', {'logs': game.game_history}, broadcast=True)
 
-
 if __name__ == '__main__':
-    
     tool_list =[on_start_game, on_deal_community_cards]
     #eliza.renew_function_calling_tools(tool_list)
-
     socketio.run(app, host = '0.0.0.0', port = 3002, debug=True)

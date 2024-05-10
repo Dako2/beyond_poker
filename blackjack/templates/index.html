@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blackjack Game</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        body { background-color: #333; color: white; padding: 20px; }
+        #dealer-cards, #player-cards { margin-bottom: 20px; }
+        .card { display: inline-block; margin-right: 5px; }
+        img { width: 100px; } /* Set a fixed width for cards or adjust as needed */
+    </style>
+</head>
+<body>
+    <h1>Blackjack</h1>
+    <h2>Dealer's Hand</h2>
+    <div id="dealer-cards"></div>
+    <h2>Your Hand</h2>
+    <div id="player-cards"></div>
+    <button id="startGameButton" class="btn btn-success">Start New Game</button>
+    <button id="hitButton" class="btn btn-primary">Hit</button>
+    <button id="standButton" class="btn btn-secondary">Stand</button>
+    <p id="message"></p>
+    <p id="game-messages"></p>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const socket = io();
+
+            document.getElementById('startGameButton').addEventListener('click', startGame);
+
+            socket.on('deal_cards', function(data) {
+                displayCards('player-cards', data.hand);
+                displayCard('dealer-cards', data.dealer_card); // Show only one dealer card
+                displayBackCard('dealer-cards'); // Show the back of a card for the hidden card
+                document.getElementById('hitButton').disabled = false;
+                document.getElementById('standButton').disabled = false;
+            });
+
+            socket.on('card_dealt', function(data) {
+                displayCards('player-cards', data.hand);
+                document.getElementById('message').textContent = 'Current Score: ' + data.score;
+            });
+
+            socket.on('game_over', function(data) {
+                displayCards('dealer-cards', data.dealer_hand);
+                document.getElementById('message').textContent = data.message + ' Your final score: ' + data.score + '. Dealer\'s final score: ' + data.dealer_score;
+                document.getElementById('hitButton').disabled = true;
+                document.getElementById('standButton').disabled = true;
+            });
+
+            socket.on('gameMessage', function(data) {
+                console.log(data.message);
+                document.getElementById('game-messages').textContent = data.message;
+            });
+
+            socket.on('bot_action', function(data) {
+                console.log('Jane\'s action: ' + data.action);
+                document.getElementById('game-messages').textContent = data.message;
+            });
+
+            document.getElementById('hitButton').addEventListener('click', function() {
+                socket.emit('hit');
+                console.log('Player hit');
+            });
+
+            document.getElementById('standButton').addEventListener('click', function() {
+                socket.emit('stand');
+                console.log('Player stands');
+            });
+
+            function startGame() {
+                socket.emit('start_game');
+                console.log('Starting new game');
+            }
+
+            
+            // Additional helper functions...       
+            function displayCards(elementId, cards) {
+                const container = document.getElementById(elementId);
+                container.innerHTML = ''; // Clear previous contents
+                cards.forEach(card => {
+                    const cardElem = document.createElement('img');
+                    const cardFile = card.rank + card.suit[0].toUpperCase() + '.png'; // Constructs filename like '2C.png'
+                    cardElem.src = '/static/cards_png/' + cardFile; // Correct path to static images
+                    cardElem.className = 'card';
+                    container.appendChild(cardElem);
+                });
+            }
+    
+            function displayCard(elementId, card) {
+                const container = document.getElementById(elementId);
+                container.innerHTML = ''; // Clear previous cards
+                const cardElem = document.createElement('img');
+                const cardFile = card.rank + card.suit[0].toUpperCase() + '.png'; // Example 'AC.png'
+                cardElem.src = '/static/cards_png/' + cardFile;
+                cardElem.className = 'card';
+                container.appendChild(cardElem);
+            }
+
+
+    
+            function displayBackCard(elementId) {
+                const container = document.getElementById(elementId);
+                const cardElem = document.createElement('img');
+                cardElem.src = '/static/cards_png/BACK.png'; // Path to the back card image
+                cardElem.className = 'card';
+                container.appendChild(cardElem);
+            }
+        });
+    </script>
+    
+</body>
+</html>

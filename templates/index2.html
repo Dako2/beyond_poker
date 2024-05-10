@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Poker Game Interface</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* 阻止滚动 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f4f4f8;
+        }
+        .container {
+            text-align: center;
+        }
+
+        .vertical-slider {
+            height: 150px;
+            transform: rotate(-90deg);
+        }
+
+        @media (max-width: 120px) {
+            .vertical-slider {
+                height: 100px; /* Smaller height for smaller devices */
+            }
+        }
+
+        .col-3.d-flex.align-items-center {
+            height: auto; /* Set the height to auto */
+        }
+
+        .d-flex {
+            display: flex;
+            flex-wrap: nowrap;  // Allows items to wrap if needed
+            justify-content: center;  // Centers items horizontally
+            align-items: center;  // Centers items vertically
+            width: 100%;  // Ensures the flex container takes full width of its parent
+        }
+
+        .card-img {
+            width: 120px;  /* Default smaller width for mobile devices */
+            height: 200px;  /* Default smaller height for mobile devices */
+            margin: 5px;  /* Smaller margin for tighter spaces */
+            background: #eee;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+        }
+
+        @media (min-width: 768px) {
+            .card-img {
+                width: 150px;
+                height: 220px;
+                margin: 10px;
+            }
+        }
+        .full-width {
+            width: 100%; /* Full width */
+        }
+        .game-info {
+            font-size: 0.9rem;
+            text-align: left;
+            margin-bottom: 1px;
+            margin-top: 1px;
+        }
+        .btn-square {
+            width: 100%; /* Adjust width to 100% of the column */
+            height: 130px; /* Height equal to width for square appearance */
+            margin-bottom: 1px;
+            margin-top: 1px;
+            font-size: 1.2em;
+        }
+        .btn-raise {
+            background-color: #eb8b95;
+            width: 100%; /* Adjust width to 100% of the column */
+            height: 130px; /* Height equal to width for square appearance */
+            margin-bottom: 1px;
+            margin-top: 1px;
+            font-size: 1.2em;
+
+        }
+        .btn-fold {
+            height: 95px; /* Slightly taller */
+            margin-bottom: 2px; /* Adds spacing below the Fold button */
+            margin-top: 1px;
+            
+        }
+        .btn-all-in {
+            height: 30px; /* Slightly shorter */
+            margin-bottom: 1px; /* Adds spacing below the Fold button */
+            margin-top: 1px;
+        }
+        .btn-primary {
+            background-color: rgba(200, 206, 212, 0.5); /* Bootstrap primary blue with 50% transparency */
+            color: rgba(0, 0, 0, 0.6);
+            border: none; /* Optional: removes the border if desired */
+        }
+        .fullscreen-active {
+            position: fixed; /* Stay in place during scroll */
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden; /* Hide scroll bars */
+            z-index: 9999; /* Make sure it sits on top of all other content */
+        }
+        .row > div {
+            border: 1px solid red; /* Temporarily add borders to see the column divisions */
+        }
+
+
+    </style>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.js"></script>
+    <script>
+        var socket = io();
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handling connection and disconnection events
+            socket.on('connect', function() {
+                console.log('connected to server.');
+                socket.emit('join_game'); // Join the game  
+            });
+
+            socket.on('disconnect', function() {
+                console.log('Disconnected from server.');
+            });
+
+            // Handling incoming game messages
+            socket.on('gameMessage', function(data) {
+                var gameMessageElement = document.getElementById('gameMessage');
+                if (gameMessageElement) {
+                    gameMessageElement.textContent = data.message;
+                } else {
+                    console.log('GameMessage element not found');
+                }
+            });
+
+            socket.on('gameStatus', function(data) {
+                var gameInfoElement = document.getElementById('GameInfo');
+                if (gameInfoElement) {
+                    gameInfoElement.textContent = data.message;
+                } else {
+                    console.log('GameInfo element not found');
+                }
+            });
+
+            socket.on('deal_player_cards', function(data) {
+                console.log('Received cards:', data.cards);
+                data.cards.forEach((card, index) => {
+                    const cardImg = document.getElementById(`card${index+1}`);
+                    if (cardImg) {
+                        cardImg.src = `/static/cards_png/${card}`;
+                        cardImg.alt = card;
+                    } else {
+                        console.log(`Card image element for card${index+1} not found`);
+                    }
+                });
+            });
+
+            // Handle device orientation change
+            window.addEventListener("orientationchange", function() {
+                if (window.orientation === 90 || window.orientation === -90) {
+                    openPseudoFullscreen();
+                } else {
+                    alert("For best viewing, please rotate your device to landscape.");
+                }
+            });
+
+            // Prevent page scrolling on touch devices
+            document.body.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+            }, { passive: false });
+        });
+
+        // Game action functions
+        function joinGame() {
+            socket.emit('join_game');
+        }
+
+        function performAction(action) {
+            console.log(`Performing action: ${action}`);
+            if (action === 'bet') {
+                const amount = document.getElementById('betAmount').value;
+                console.log(`Betting amount: ${amount}`);
+                socket.emit('action', { action: 'bet', amount: parseInt(amount) });
+            } else {
+                socket.emit('action', { action: action });
+            }
+        }
+
+        function toggleActionMenu() {
+            const menu = document.getElementById('actionMenu');
+            menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
+            console.log('Toggling action menu:', menu.style.display);
+        }
+
+        function updateBetValue() {
+            const betAmount = document.getElementById('betAmount').value;
+            document.getElementById('betValue').textContent = betAmount;
+            console.log('Updated bet amount to:', betAmount);
+        }
+
+        function sendChatMessage() {
+            var message = document.getElementById('chatInput').value;
+            socket.emit('send_chat_message', { 'message': message });
+            document.getElementById('chatInput').value = ''; // Clear input field
+        }
+        // Fullscreen functions
+        function openPseudoFullscreen() {
+            const docElm = document.documentElement;
+            if (docElm.requestFullscreen) {
+                docElm.requestFullscreen();
+            } else if (docElm.mozRequestFullScreen) {
+                docElm.mozRequestFullScreen();
+            } else if (docElm.webkitRequestFullScreen) {
+                docElm.webkitRequestFullScreen();
+            } else if (docElm.msRequestFullscreen) {
+                docElm.msRequestFullscreen();
+            }
+            applyFullscreenStyles();
+        }
+
+        function applyFullscreenStyles() {
+            const styles = {
+                width: '100%', height: '100%', margin: '0', padding: '0'
+            };
+            Object.assign(document.documentElement.style, styles);
+            Object.assign(document.body.style, styles);
+        }
+
+        function exitPseudoFullscreen() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+                document.mozCancelFullScreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+            resetFullscreenStyles();
+        }
+
+        function resetFullscreenStyles() {
+            const resetStyles = {
+                width: null, height: null, margin: null, padding: null
+            };
+            Object.assign(document.documentElement.style, resetStyles);
+            Object.assign(document.body.style, resetStyles);
+        }
+
+        function toggleFullScreen() {
+            const fsButton = document.getElementById('fullscreenButton');
+            const icon = fsButton.querySelector('i');
+            if (!document.fullscreenElement && !document.body.classList.contains('fullscreen-active')) {
+                openPseudoFullscreen();
+                icon.className = 'fas fa-compress';
+            } else {
+                exitPseudoFullscreen();
+                icon.className = 'fas fa-expand';
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container-fluid h-99">
+        <div class="row h-99">
+            <div class="col-6 d-flex flex-nowrap flex-column align-items-center">
+                <p id="GameInfo"></p>
+                <div id="Cards">
+                    <img id="card1" alt="Card 1" width="180" src="static/cards_png/BACK.png">
+                    <img id="card2" alt="Card 2" width="180" src="static/cards_png/BACK.png">
+                </div>
+                <p id="gameMessage"></p>
+            </div>
+            <div class="col-6">
+                <div class="row mb-2">
+                    <div class="col-6">
+                        <button class="btn btn-warning btn-square" onclick="performAction('check')">Check</button>
+                    </div>
+                    <div class="col-6">
+                        <button class="btn btn-success btn-square" onclick="performAction('call')">Call</button>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-4 d-flex flex-column">
+                        <button class="btn btn-secondary full-width btn-fold" onclick="performAction('fold')">Fold</button>
+                        <button class="btn btn-danger full-width btn-all-in" onclick="performAction('allin')">All in</button>
+                    </div>
+                    <div class="col-6">
+                        <button class="btn btn-info btn-raise" onclick="performAction('bet')">Raise</button>
+                    </div>
+                    <div class="col-2">
+                        <input type="range" id="betAmount" class="form-range vertical-slider" min="0" max="1000" step="5" value="10" oninput="updateBetValue()" orientation="vertical">
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-10">
+                        <input type="text" class="form-control" placeholder="Type in Message">
+                    </div>
+                    <div class="col-2">
+                        <button class="btn btn-primary full-width" onclick="sendChatMessage()">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

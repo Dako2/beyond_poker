@@ -4,6 +4,7 @@ from treys import Evaluator
 from treys import Card, Deck
 import asyncio
 import random
+from collections import deque
 
 evaluator = Evaluator()
 
@@ -36,69 +37,97 @@ class Player:
             return action
         
 class Game:
-    def __init__(self):
+    def __init__(self, players):
         self.deck = Deck()
         self.deck.shuffle()
-        self.players = []
+
+        self.players = deque(players)
+        self.num_players = len(players)
+        
         self.dealer_position = 0
+        self.small_blind_position = (self.dealer_position + 1) % self.num_players
+        self.big_blind_position = (self.dealer_position + 2) % self.num_players
+        self.starting_position = (self.dealer_position + 3) % self.num_players  # Betting starts left of the big blind
+        
+        self.current_position = self.starting_position
+
+        self.state = None
+        self.pot = 0
+        self.current_bet = 0
+
+    def get_next_player(self):
+        # Rotate the deque until you find an active player or return to the original position.
+        attempts = len(self.players)
+        while attempts > 0:
+            player = self.players.popleft()  # Remove the player from the front
+            self.players.append(player)  # Add the player back to the end
+            if player.in_game:  # Check if the player is still active in the game
+                return player
+            attempts -= 1
+        return None  # Return None if no active players are found
 
     def post_blinds(self):
-        players = list(self.players.values())
-        # Calculate the positions of the small blind and big blind
-        small_blind_position = (self.dealer_position + 1) % len(players)
-        big_blind_position = (self.dealer_position + 2) % len(players)
-    
+        pass
     def rotate_dealer(self):
-        self.dealer_position = (self.dealer_position + 1) % len(self.players)
+        self.players.rotate(-1)
 
-    def add_player(self, sid, name, stack, bot=False):
-        player = Player(sid, name, stack, bot)
-        self.players.append(player)
+    def start_game(self,):
+        self.rotate_dealer()
+        self.current_position = self.starting_position
+        starting_stacks = [player.stack for player in self.players]
 
+        self.state = NoLimitTexasHoldem.create_state(
+            # Automations
+            (
+                Automation.ANTE_POSTING,
+                Automation.BET_COLLECTION,
+                Automation.BLIND_OR_STRADDLE_POSTING,
+                Automation.HOLE_CARDS_SHOWING_OR_MUCKING,
+                Automation.HAND_KILLING,
+                Automation.CHIPS_PUSHING,
+                Automation.CHIPS_PULLING,
+            ),
+            False,  # Uniform antes?
+            0,  # Antes
+            (100, 200,),  # Blinds or straddles
+            200,  # Min-bet
+            starting_stacks,  # Starting stacks
+            3,  # Number of players
+            mode=Mode.CASH_GAME,
+        )
 
-state = NoLimitTexasHoldem.create_state(
-    # Automations
-    (
-        Automation.ANTE_POSTING,
-        Automation.BET_COLLECTION,
-        Automation.BLIND_OR_STRADDLE_POSTING,
-        Automation.HOLE_CARDS_SHOWING_OR_MUCKING,
-        Automation.HAND_KILLING,
-        Automation.CHIPS_PUSHING,
-        Automation.CHIPS_PULLING,
-    ),
-    False,  # Uniform antes?
-    0,  # Antes
-    (100, 200,),  # Blinds or straddles
-    200,  # Min-bet
-    (50000, 50000, 50000),  # Starting stacks
-    3,  # Number of players
-    mode=Mode.CASH_GAME,
-)
+    def deal_holes(self):
+        player = self.get_next_player()
+        while player:
+            player.in_game = True
+            player.hand = [TreysCard(x, flipped=False) for x in self.deck.draw(2)]
+            hand = ''.join(card.card_str for card in player.hand)
+            print(f"{player.name} has {hand}")
+            self.state.deal_hole(hand)
+            player = self.get_next_player()
 
-state.deal_hole('Ac2d')  # Ivey
-state.deal_hole('????')  # Antonius
-state.deal_hole('7h6h')  # Dwan
+    def bet_round(self):
+        state.complete_bet_or_raise_to(7000)  # Dwan
+        state.complete_bet_or_raise_to(23000)  # Ivey
+        state.fold()  # Antonius
+        state.check_or_call()  # Dwan
 
-state.complete_bet_or_raise_to(7000)  # Dwan
-state.complete_bet_or_raise_to(23000)  # Ivey
-state.fold()  # Antonius
-state.check_or_call()  # Dwan
+        state.burn_card('??')
+        state.deal_board('Jc3d5c')
 
-state.burn_card('??')
-state.deal_board('Jc3d5c')
+        state.complete_bet_or_raise_to(5000)  # Ivey
+        state.check_or_call()  # Dwan
 
-state.complete_bet_or_raise_to(5000)  # Ivey
-state.check_or_call()  # Dwan
+        state.burn_card('??')
+        state.deal_board('Jd')
 
-state.burn_card('??')
-state.deal_board('Jd')
+        state.complete_bet_or_raise_to(5000)  # Dwan
+        state.check_or_call()  # Dwan
 
-state.complete_bet_or_raise_to(5000)  # Dwan
-state.check_or_call()  # Dwan
+        try:
+            a = state.burn_card('??')
+            a = state.deal_board('Qd')
+        except:
+            print("invalid action")
 
-try:
-    a = state.burn_card('??')
-    a = state.deal_board('Qd')
-except:
-    print("invalid action")
+        state.complete_bet_or_raise_to(5000)  # Ivey
