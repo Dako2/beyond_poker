@@ -67,7 +67,7 @@
 
         socket.on('message', function(data) {
             console.log(data.message);
-            document.getElementById('gameStatus').innerText = data.message;
+            document.getElementById('gameStatus').innerText = data.message + " ";
         });
 
         socket.on('update_game', function(data) {
@@ -186,15 +186,10 @@
         <div id="sidebar">
             <div class="infoBox">
                 <strong>Chips:</strong> <span id="playerChips">1000</span>
-            </div>
-            <div class="infoBox">
-                <strong>Current Bet:</strong> <span id="playerCurrentBet">0</span>
-            </div>
-            <div class="infoBox">
-                <strong>Game Status:</strong> <span id="gameStatus">Waiting for next round...</span>
-            </div>
-            <div class="infoBox">
-                <strong>Game Status:</strong> <span id="pot">0</span>
+                <strong>Game</strong> <span id="GameId">0</span>
+                <strong>Pot</strong> <span id="Pot">0</span>
+                <strong>Current Bet</strong> <span id="CurrentBet">0</span>
+                <strong>Game Status</strong> <span id="Status">Waiting...</span>
             </div>
         </div>
         <div id="mainContent">

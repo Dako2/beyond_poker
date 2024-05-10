@@ -33,12 +33,11 @@
             document.getElementById('logArea').innerHTML = logs;
         });
 
-
         function startGame() {
             socket.emit('start_game');
         }
         function dealCards() {
-            socket.emit('deal_cards');
+            socket.emit('proceed_game');
         }
     </script>
 </head>

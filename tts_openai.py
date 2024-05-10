@@ -6,7 +6,7 @@ import pyaudio
 import nltk
 from nltk.tokenize import sent_tokenize
 
-def tts_openai_replay(input_text, bypass=False):
+def tts_openai_replay(input_text, bypass=True):
     if bypass:
         return 0
 

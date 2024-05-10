@@ -4,6 +4,8 @@ from treys import Deck, Card
 from llm_test import LLMPlayer
 from tts_openai import tts_openai_replay, tts_openai_to_wav_files
 import time
+import asyncio
+import threading
 
 evaluator = Evaluator()
 
@@ -15,7 +17,6 @@ class TreysCard:
 
     def flip(self):
         """Toggle the flipped state of the card."""
-        print("flipping")
         self.flipped = not self.flipped
 
     def __repr__(self):
@@ -25,6 +26,7 @@ class TreysCard:
 class Player:
     def __init__(self, id, name, chips=1000, autobot = True):
         self.id = id
+        self.sid = None
         self.name = name
         self.hand_str = []
         self.hand = []
@@ -39,32 +41,36 @@ class Player:
 
         self.log = ""
         self.action = ""
-        self.waiting_for_action = False
+
+        self.action_event = threading.Event()
+        self.current_action = None
+
+    def wait_for_action(self):
+        self.action_event.clear()  # Reset the event
+        self.action_event.wait()  # Block here until the event is set
+        return self.current_action  # Return the action that was received
+    
+    def send_message(self, message, socketio):
+        socketio.emit('game_message', {'message': message}, broadcast=True)
 
     def logging(self,text):
         self.log += text
         self.action = text
 
-    def query_action(self, message, game_state="", game_history="", source = "game_engine"):
-        self.action = ""
-        print(message)
+    async def query_action(self, socketio):
         if self.autobot:
-            self.action = random.choice(['check', 'call', 'bet'])
-            if self.action == 'bet':
-                self.action += str(random.randrange(5, int(self.chips//2), 5))
-            return self.action
+            action = random.choice(['check', 'call', 'bet'])
+            if action == 'bet':
+                action += str(random.randrange(5, int(self.chips // 2), 5))
+            await asyncio.sleep(3)  # Simulate thinking time
+            return action
         else:
-            #tts_openai_to_wav_files("it's your move now, you can either fold, check, call, raise or all-in.")
-            tts_openai_replay("it's your move now, you can either fold, check, call, raise or all-in.")
+            self.current_action = None  # Reset current action
+            socketio.emit('gameMessage', {'message': "your move"}, broadcast=True)
+            while self.current_action is None:
+                await asyncio.sleep(0.1)  # Wait for the player to make a move
+            return self.current_action
             
-            self.waiting_for_action = True
-            while self.waiting_for_action:
-                #if self.action = input(message):
-                #    self.waiting_for_action = False
-                #print("waiting for the action")
-                time.sleep(0.1)
-            return self.action
-    
     def bet(self, amount):
         if amount <= self.chips:
             self.chips -= amount
@@ -84,9 +90,7 @@ class Player:
         return game_updates
 
 class Game:
-    def __init__(self,):
-        eliza = Player(1, 'Eliza', autobot=True)
-        human = Player(2, 'Human', autobot=True)
+    def __init__(self, eliza, human):
         self.players = {'Player 1': eliza, 'Player 2': human}
         #self.max_players = 2
         self.deck = Deck()
@@ -113,7 +117,7 @@ class Game:
 
     def logging(self, text):
         self.game_history += text
-    
+
     def post_blinds(self):
         players = list(self.players.values())
         # Calculate the positions of the small blind and big blind
@@ -140,14 +144,19 @@ class Game:
         #self.logging(f"Dealer position is now at {self.dealer_position}.\n")
 
     def start_game(self):
+        self.game_histories[self.game_id] = self.game_history
         self.game_id += 1
+        self.logging(f"Start Game #{self.game_id}\n")
+
         self.pot = 0
         self.current_highest_bet = 0
         
         self.deck = Deck()
         self.rotate_dealer()
-        self.post_blinds()
+        self.community_cards = [TreysCard(x) for x in self.deck.draw(5)] #['back']*5, object class, not string
         
+        self.post_blinds()
+
         players = list(self.players.values())
         for player in players:
             player.in_game = True
@@ -155,37 +164,34 @@ class Game:
             player.hand_str = [card.card_str for card in player.hand]
             player.hand_int = [card.card_int for card in player.hand]
         
-        self.community_cards = [TreysCard(x) for x in self.deck.draw(5)] #['back']*5, object class, not string
-        self.community_cards_str = [card.card_str for card in self.community_cards]
-        print(self.community_cards_str) #to be hidden
-
+        self.logging(f"Each player has been dealt with a hand.\n")
         self.game_state = 'pre-flop'
-        self.run_betting_round('pre-flop')
+
+        return
     
     def proceed_game(self):
         # Deal 5 community cards as an example
-        print("proceeding the game ...")
         if self.game_state == 'pre-flop':
             for i in range(3):
                 self.community_cards[i].flip()
-            self.logging(f"Flop Community cards\n")
+            self.logging(f"Flop Community cards: {[card for card in self.community_cards]}\n")
             self.game_state = 'flop'
             self.run_betting_round('flop')
-            #self.proceed_game()
+            self.proceed_game()
 
         elif self.game_state == 'flop':
             self.community_cards[3].flip()
-            self.logging(f"Turn Community cards\n")
+            self.logging(f"Turn Community cards: {[card for card in self.community_card]}\n")
             self.game_state = 'turn'
             self.run_betting_round('turn')
-            #self.proceed_game()
+            self.proceed_game()
 
         elif self.game_state == 'turn':
             self.community_cards[4].flip()
-            self.logging(f"River Community cards\n")
+            self.logging(f"River Community cards: {[card for card in self.community_cards]}\n")
             self.game_state = 'river'
             self.run_betting_round('river')
-            #self.proceed_game()
+            self.proceed_game()
 
         elif self.game_state == 'river':
             self.logging(f"Showdown!\n")
@@ -206,7 +212,6 @@ class Game:
     
     def declare_winner(self):
         active_players = [player for player in self.players.values() if player.in_game]
-
         # Evaluate hands if more than one player remains
         if len(active_players) > 1:
             board = [card.card_int for card in self.community_cards]
@@ -270,44 +275,97 @@ class Game:
             hands.append([card.card_int for card in player.hand])
         #print(board, hands)
         summary += evaluator.hand_summary(board, hands)
-        self.game_histories[self.game_id] = self.game_history
-        
+
         print(summary)
         return summary
     
-    def run_betting_round(self, stage): #only two players
-        print(f"Starting {stage} betting round.")
-
+    def run_betting_round(self, stage):
         players = list(self.players.values())
+        print(f"Starting {stage} betting round.")
         starting_position = (self.dealer_position + 3) % len(players)  # Betting starts left of the big blind
         self.current_position = starting_position
 
         active_betting = True
         while active_betting:
+            print(f"Stage: {stage}, Current highest bet: {self.current_highest_bet}")
             player = players[self.current_position]
-            action = player.query_action()
-            
-            print(f"Player {player.name} action:{action}")
-            if 'fold' in action:
-                player.fold()
-                break
-            elif 'call' in action:
-                call_amount = self.current_highest_bet - player.current_bet
-                player.bet(call_amount)
-                self.pot += call_amount
-            else:
-                print(f"Invalid action: {action}")
+            action = ""
+            if player.in_game:
+                action = self.player_bet_event(player,)
+                if 'fold' in action:
+                    self.declare_winner()  # Only two players, other player wins
+                    break
             self.current_position = (self.current_position + 1) % len(players)
             # Ensure the loop continues if there's an active raise or all-in that others need to respond to
-            if self.current_position == starting_position: # to be refined
+            if self.current_position == starting_position and action not in ['raise', 'allin']:
+                active_betting = False  # Ends the round if no new raise or all-in has occurred
+
+    def player_bet_event(self, player):
+        message = f"{self.game_history}\n\n{player.name}, it is your turn. Please choose (call)/(bet)/(fold)/(check)/(allin). You currently have {player.chips} chips."
+        #self.socketio.emit('gameMessage', {'message': message}, broadcast=True)
+        action = player.wait_for_action()  # This will block until the player's action is received
+        # Process action here
+        print(f"Action received: {action}")
+        return action
+    
+    def player_bet(self, player,):
+        while True:
+            action = self.player_bet_event(player)
+            if 'fold' in action:
+                player.fold()
+                self.logging(f"{player.name} folds.\n")
                 break
-
-        active_players = [player for player in self.players.values() if player.in_game]
-        if len(active_players) == 1:
-            self.declare_winner()  # Only two players, other player wins
-            
-        self.proceed_game()
-
+            elif 'call' in action:
+                #if self.current_highest_bet > 0:
+                call_amount = self.current_highest_bet - player.current_bet
+                if call_amount > 0:
+                    if player.bet(call_amount):
+                        print(f"{player.name} calls {self.current_highest_bet}.")
+                        self.pot += call_amount
+                        self.logging(f"{player.name} calls. Pot size goes to {self.pot}.\n")
+                        break
+                    else:
+                        message = "Not enough chips to call."
+                else:
+                    self.logging(f"{player.name} checks.\n")
+                    break
+            elif 'check' in action:
+                if player.current_bet - self.current_highest_bet == 0:
+                    self.logging(f"{player.name} checks.\n")
+                    break
+                else:
+                    message = "Cannot check unless all in."
+            elif action == 'allin':
+                all_in_amount = player.allin()
+                if all_in_amount < self.current_highest_bet:
+                    # Handle side pot scenario
+                    self.side_pots.append(self.manage_side_pots(player))
+                    self.logging(f"Side pot created with {self.side_pot} chips due to all-in.")
+                else:
+                    self.current_highest_bet = all_in_amount
+                self.pot += all_in_amount
+                break
+            elif 'bet' in action:
+                try:
+                    bet_amount = int(action.split('bet')[-1])
+                    if bet_amount > self.current_highest_bet:
+                        additional_bet = bet_amount - player.current_bet
+                        if player.bet(additional_bet):
+                            self.current_highest_bet = bet_amount
+                            self.pot += additional_bet
+                            self.logging(f"{player.name} raises to {bet_amount}. Pot size goes up to {self.pot}.\n")
+                            # After action, update and send game state
+                            break
+                        else:
+                            message = "Not enough chips."
+                    else:
+                        message = "Raise must exceed the current highest bet."
+                except ValueError:
+                    message = "Please add a valid bet amount."
+            else:
+                print(f"Invalid action: {action}")
+        return action
+    
     def manage_side_pots(self, all_in_player):
         all_in_amount = all_in_player.current_bet
         excess_amount = 0
@@ -352,7 +410,9 @@ def cards_to_img(cards_list):
 
 if __name__ == '__main__':
 
-    game = Game()
+    eliza = LLMPlayer(1, 'Eliza', autobot=True)
+    human = Player(2, 'Human', autobot=True)
+    game = Game(eliza, human)
 
     game.start_game()
     game.proceed_game()
