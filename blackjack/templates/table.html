@@ -8,7 +8,7 @@
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <style>
         body { background-color: #333; color: white; padding: 20px; text-align: center;}
-        #dealer-cards, #player-cards { margin-bottom: 20px; }
+        #dealer-cards { margin-bottom: 20px; }
         .card { display: inline-block; margin-right: 5px; }
         img { width: 150px; } /* Set a fixed width for cards or adjust as needed */
         #chat-message {
@@ -29,11 +29,6 @@
         <img src="/static/cards_png/BACK.png" class="card">
         <img src="/static/cards_png/BACK.png" class="card">
     </div>
-    <h2>Your Hand</h2>
-    <div id="player-cards">
-        <img src="/static/cards_png/BACK.png" class="card">
-        <img src="/static/cards_png/BACK.png" class="card">
-    </div>
     <button id="startGameButton" class="btn btn-success">Start New Game</button>
     <button id="hitButton" class="btn btn-primary">Hit</button>
     <button id="standButton" class="btn btn-secondary">Stand</button>
@@ -49,18 +44,8 @@
         document.addEventListener('DOMContentLoaded', function () {
             const socket = io();
             document.getElementById('startGameButton').addEventListener('click', startGame);
-            
-            socket.on('connect', function() {
-                console.log('connected to server.');
-                socket.emit('join_game'); // Join the game  
-            });
-
-            socket.on('disconnect', function() {
-                console.log('Disconnected from server.');
-            });
 
             socket.on('deal_cards', function(data) {
-                displayCards('player-cards', data.hand);
                 displayCard('dealer-cards', data.dealer_card); // Show only one dealer card
                 displayBackCard('dealer-cards'); // Show the back of a card for the hidden card
                 document.getElementById('hitButton').disabled = false;
@@ -68,7 +53,6 @@
             });
 
             socket.on('card_dealt', function(data) {
-                displayCards('player-cards', data.hand);
                 document.getElementById('message').textContent = 'Current Score: ' + data.score;
             });
 

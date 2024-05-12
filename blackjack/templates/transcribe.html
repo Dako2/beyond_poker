@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Audio Transcription Service</title>
+<script>
+function sendAudio() {
+    var formData = new FormData();
+    var audioFile = document.getElementById('audioFile').files[0];
+    formData.append('audio', audioFile);
+
+    // Create an XMLHttpRequest to send the audio file
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/transcribe', true);
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+            var response = JSON.parse(xhr.responseText);
+            document.getElementById('transcriptionResult').innerText = 'Transcription: ' + response.transcription;
+        } else if (xhr.readyState == 4 && xhr.status != 200) {
+            document.getElementById('transcriptionResult').innerText = 'Error processing audio.';
+        }
+    };
+    xhr.send(formData);
+}
+</script>
+</head>
+<body>
+<h1>Upload Audio for Transcription</h1>
+<form onsubmit="sendAudio(); return false;">
+    <input type="file" id="audioFile" accept="audio/*" required>
+    <button type="submit">Transcribe Audio</button>
+</form>
+<p id="transcriptionResult"></p>
+</body>
+</html>

@@ -19,7 +19,7 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 BLACKJACK_PLAYER = f"Your name is Jane, and you are a Blackjack game player and tutor with a colorful personality. \
 You will be given your hand cards and game state information, \
 and you can hit, or stand. You always provide a playful \
-response to carry on some conversation in the game. \n"
+response to carry on some conversation in the game.\n"
 
 context_tmpl_str = """\
 It's Black Jack game, the goal is to be as close to 21 as possible but not over. Your hand is: {hand_str}, Dealer's hand is: {dealer_hand_str} and hidden cards.\
@@ -28,7 +28,6 @@ on why you made this move.\n
 ===========more context============\n
 {additional_context}
 """
-
 class LLMPlayer():
     def __init__(self, id, name, chips=1000, autobot = True):
         self.id = id
@@ -50,7 +49,7 @@ class LLMPlayer():
         self.system_prompt = BLACKJACK_PLAYER
         self.context_tmpl_str = PromptTemplate(context_tmpl_str)
     
-        self.llm = OpenAI(model="gpt-3.5-turbo-0613", max_tokens=125, temperature=0.9)
+        self.llm = OpenAI(model="gpt-3.5-turbo-0613", max_tokens=150, temperature=0.9)
         
         self.agent = OpenAIAgent.from_tools(
             [],
@@ -79,7 +78,7 @@ class LLMPlayer():
                 dealer_hand_str=dealer_hand_str,
                 additional_context=additional_context,
             )
-            final_prompt = self.update_prompt_template(context_formatted)
+            final_prompt = self.update_prompt_template(context_formatted) + "请用中文做出所有回答。控制回答token不超过100个。"
 
             response = self.agent.chat(final_prompt)
             print("Model Response:")
