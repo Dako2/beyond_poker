@@ -1,7 +1,7 @@
 import openai
 import os
 from urllib.parse import quote
-
+import time 
 import logging
 import sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -125,6 +125,7 @@ Then, You have decided to make a move:{action}, and provide the response based o
 
     def query_action(self, content, game_state="", game_history="", source="user"):
         if self.autobot:
+            time.sleep(3)
             self.action = random.choice(['check', 'call', 'bet'])
             if self.action == 'bet':
                 self.action += str(random.randrange(5, int(self.chips//2), 5))
@@ -132,7 +133,7 @@ Then, You have decided to make a move:{action}, and provide the response based o
             return self.action
         
         if source == "game_engine":
-            self.action = random.choice(['fold','check', 'call', 'bet'])
+            self.action = random.choice(['check', 'call', 'bet'])
             if self.action == 'bet':
                 self.action += str(random.randrange(5, int(self.chips), 5))
             self.update_prompt_template(self.action, content, game_state, game_history)

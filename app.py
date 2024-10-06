@@ -9,10 +9,7 @@ socketio = SocketIO(app, manage_session=False)  # Let Flask manage session inste
 
 from game_engine import Game, cards_to_img, Player
 from llm_test import LLMPlayer
-
-eliza = LLMPlayer(1, 'Eliza', autobot=True)
-human = Player(2, 'Human', autobot=False)
-game = Game(eliza, human)
+game = Game()
 
 @app.route('/')
 def index():
@@ -24,53 +21,62 @@ def board():
 
 @socketio.on('connect')
 def handle_connect():
-    emit('message', {'message': f'joining the game...'})
+    emit('gameMessage', {'message': f'joining the game...'}, room=request.sid)
+    emit('start_game')
 
 @socketio.on('disconnect')
 def handle_disconnect():
     # Here you can handle the cleanup if necessary
-    emit('message', {'message': 'Click <Connect> to join the game...'})
-
-@socketio.on('connect_table')
-def handle_initialize_table_cards():
-    game.board_sid = request.sid
-    emit('message', {'message': f'Game {game.game_id}'}, broadcast=True)
-    emit('update_community_cards', {'cards': cards_to_img(['empty']*5)}, broadcast=True)  # Optionally, you can target only boards
-    emit('prompt', {'prompt': game.game_history})
+    emit('gameMessage', {'message': 'diconnected...'}, room=request.sid)
 
 @socketio.on('join_game')
 def on_join_game(): 
     print(f"New player connected: {'player_id'}")
-    emit('message', {'message': f'Welcome new player, waiting for the game start...'}, room=request.sid)
-    emit('deal_cards', {'cards': cards_to_img(['empty','empty'])}, room=request.sid)
+    emit('gameMessage', {'message': f'Welcome new player, waiting for the game start...'}, room=request.sid)
+    emit('deal_player_cards', {'cards': cards_to_img(['BACK','BACK'])}, room=request.sid)
+
+@socketio.on('connect_table')
+def handle_initialize_table_cards():
+    game.board_sid = request.sid
+    emit('update_community_cards', {'cards': cards_to_img(['BACK']*5)}, broadcast=True)  # Optionally, you can target only boards
 
 @socketio.on('start_game')
 def on_start_game():
+    
     """start the game and deal the cards to all players"""
     print("starting the game")
     game.start_game()
-    player_cards = human.hand_str
-    emit('deal_cards', {'cards': cards_to_img(player_cards)}, broadcast=True)
-    emit('update_community_cards', {'cards': cards_to_img(game.community_cards)}, room=game.board_sid)
-    emit('message', {'message': f'Game {game.game_id} {game.game_state} Pot ${game.pot}'}, broadcast=True)
-    emit('prompt', {'prompt': game.game_history})
-    on_deal_community_cards()
 
-@socketio.on('deal_cards')
+    human = game.players['Player 2']
+    player_cards = human.hand_str
+    print(player_cards)
+    emit('deal_player_cards', {'cards': cards_to_img(player_cards)}, broadcast=True)
+
+    board = [str(card) for card in game.community_cards]
+    print(cards_to_img(board))
+
+    emit('gameMessage', {'message': f'Game started.'}, room=request.sid)
+    emit('update_community_cards', {'cards': cards_to_img(board)}, room=game.board_sid)
+    emit('gameStatus', {'message': f'Game #{game.game_id}, Pot Size ${game.pot}, Next move: {game.get_current_player().name}'}, broadcast=True)
+    #on_deal_community_cards()
+
+@socketio.on('proceed_game')
 def on_deal_community_cards():
     game.proceed_game()
-    board = [card for card in game.community_cards]
+
+    board = [str(card) for card in game.community_cards]
     print(cards_to_img(board))
+
     try:
-        emit('message', {'message': f'Game {game.game_id} {game.game_state} Pot ${game.pot}'}, broadcast=True)
-        emit('update_community_cards', {'cards': cards_to_img(board)}, broadcast=True)
+        emit('update_community_cards', {'cards': cards_to_img(board)}, room=game.board_sid)
+        emit('gameStatus', {'message': f'Game #{game.game_id}, Pot Size ${game.pot}, Next move: {game.get_current_player().name}'}, broadcast=True)
     except:
         print("board not connected")
-    emit('prompt', {'prompt': game.game_history})
     return game.community_cards
-    
+
 @socketio.on('action')
 def handle_place_bet(data):
+    human = game.players['Player 2']
     action = data['action']
     print("----from client----->", action)
     if action == 'fold':
@@ -89,18 +95,16 @@ def handle_place_bet(data):
     elif action == 'allin':
         human.action = f"allin"
     else:
-        emit('message', {'message': f'Invalid action {action}'}, broadcast=True)
-    emit('prompt', {'prompt': game.game_history})
-    emit('update', {'playerChips': human.chips, 'playerCurrentBet':human.current_bet,
-                    'playerAction':human.action, 'gameStatus':game.game_state,
-                    'pot': game.pot, 'gameMessages':'xx'})
+        emit('gameMessage', {'message': f'Invalid action {action}'}, broadcast=True)
+    emit('gameStatus', {'message': f'Game #{game.game_id}, Pot Size ${game.pot}, {game.game_state} Next move: {game.get_current_player().name}'}, broadcast=True)
+    emit('gameMessage', {'message': f'YOU: {action}'}, broadcast=True)
 
 @socketio.on('send_chat_message')
 def handle_chat_message(data):
     user_message = data['message']
     print(f"Received message from player: {user_message}")
 
-    chat_response = eliza.query_action(user_message, source = "user")
+    chat_response = game.players['Player 1'].query_action(user_message, source = "user")
     emit('receive_chat_message', {'message': chat_response}, broadcast=True)
 
 @socketio.on('update_logs')
@@ -109,8 +113,7 @@ def update_logs():
     logs = game.get_logs()
     emit('log_update', {'logs': game.game_history}, broadcast=True)
 
-tool_list =[on_start_game, on_deal_community_cards]
-eliza.renew_function_calling_tools(tool_list)
-
 if __name__ == '__main__':
+    tool_list =[on_start_game, on_deal_community_cards]
+    #eliza.renew_function_calling_tools(tool_list)
     socketio.run(app, host = '0.0.0.0', port = 3002, debug=True)

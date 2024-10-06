@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whisper ASR</title>
+</head>
+<body>
+    <h1>Whisper ASR</h1>
+    <button id="start-recording">Start Recording</button>
+    <button id="stop-recording" style="display: none;">Stop Recording</button>
+    <p id="recording-status"></p>
+
+    <script>
+        let mediaRecorder;
+        let chunks = [];
+
+        const startRecording = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.addEventListener('dataavailable', event => {
+                    chunks.push(event.data);
+                });
+                mediaRecorder.addEventListener('stop', async () => {
+                    const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+                    const formData = new FormData();
+                    formData.append('audio', audioBlob);
+
+                    try {
+                        const response = await fetch('/transcribe', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const data = await response.json();
+                        document.getElementById('recording-status').textContent = 'Transcription: ' + data.transcription;
+                    } catch (error) {
+                        document.getElementById('recording-status').textContent = 'Error sending data.';
+                    }
+
+                    chunks = [];
+                });
+
+                mediaRecorder.start();
+                document.getElementById('start-recording').style.display = 'none';
+                document.getElementById('stop-recording').style.display = 'inline';
+                document.getElementById('recording-status').textContent = 'Recording...';
+            } catch (error) {
+                document.getElementById('recording-status').textContent = 'Failed to access microphone.';
+            }
+        };
+
+        const stopRecording = () => {
+            mediaRecorder.stop();
+            document.getElementById('start-recording').style.display = 'inline';
+            document.getElementById('stop-recording').style.display = 'none';
+            document.getElementById('recording-status').textContent = 'Processing transcription...';
+        };
+
+        document.getElementById('start-recording').addEventListener('click', startRecording);
+        document.getElementById('stop-recording').addEventListener('click', stopRecording);
+    </script>
+</body>
+</html>

@@ -9,7 +9,7 @@ import time
 from openai import OpenAI
 
 
-def tts_openai_replay(input_text, bypass=False):
+def tts_openai_replay(input_text, bypass=True):
     if bypass:
         return 0
 

@@ -4,6 +4,7 @@ from treys import Deck, Card
 from llm_test import LLMPlayer
 from tts_openai import tts_openai_replay, tts_openai_to_wav_files
 import time
+from collections import deque
 
 evaluator = Evaluator()
 
@@ -15,6 +16,7 @@ class TreysCard:
 
     def flip(self):
         """Toggle the flipped state of the card."""
+        print("flipping")
         self.flipped = not self.flipped
 
     def __repr__(self):
@@ -36,32 +38,30 @@ class Player:
         self.in_game = True  # True if the player hasn't folded
         self.autobot = autobot
 
+        self.action = None
+
         self.log = ""
-        self.action = ""
         self.waiting_for_action = False
 
     def logging(self,text):
         self.log += text
-        self.action = text
 
-    def query_action(self, message, game_state="", game_history="", source = "game_engine"):
-        print(message)
-        time.sleep(2)
+    def query_action(self,):
         if self.autobot:
-            self.action = random.choice(['check', 'call', 'bet'])
-            if self.action == 'bet':
-                self.action += str(random.randrange(5, int(self.chips//2), 5))
-            return self.action
+            action = random.choice(['call', 'bet'])
+            if action == 'bet':
+                action += str(random.randrange(5, int(self.chips), 5))
+            return action
         else:
             #tts_openai_to_wav_files("it's your move now, you can either fold, check, call, raise or all-in.")
-            tts_openai_replay("it's your move now, you can either fold, check, call, raise or all-in.")
+            #tts_openai_replay("it's your move now, you can either fold, check, call, raise or all-in.")
             
             self.waiting_for_action = True
             while self.waiting_for_action:
                 #if self.action = input(message):
                 #    self.waiting_for_action = False
-                print("waiting for the action")
-                time.sleep(1)
+                #print("waiting for the action")
+                time.sleep(0.5)           
             return self.action
     
     def bet(self, amount):
@@ -83,21 +83,26 @@ class Player:
         return game_updates
 
 class Game:
-    def __init__(self, eliza, human):
+    def __init__(self,):
+        eliza = Player(1, 'Eliza', autobot=True)
+        human = Player(2, 'Human', autobot=False)
         self.players = {'Player 1': eliza, 'Player 2': human}
         #self.max_players = 2
         self.deck = Deck()
         self.community_cards = []
-        self.community_cards_secret = []
+        
+        self.players_queue = deque([eliza, human])
+        self.num_players = 2
+        
 
         self.pot = 0
         self.side_pots = []
         self.current_highest_bet = 0
         
         self.game_id = 0
+        self.current_position = 0
         self.board_sid = None
         self.game_state = 'waiting'
-        self.game_current_state = self.get_current_state()
         self.game_history = ""
         self.game_histories = {}
 
@@ -106,16 +111,11 @@ class Game:
         self.small_blind_amount = 5
         self.big_blind_amount = 10
 
+    def get_current_player(self):
+        return list(self.players.values())[self.current_position]
+
     def logging(self, text):
         self.game_history += text
-
-    def get_current_state(self):
-        state = ""
-        state += f"Pot: {self.pot}\n"
-        state += f"Current highest bet: {self.current_highest_bet}\n"
-        state += f"Community cards: {self.community_cards}\n"
-        state += f"Players: {self.players}\n"
-        return state
     
     def post_blinds(self):
         players = list(self.players.values())
@@ -143,19 +143,14 @@ class Game:
         #self.logging(f"Dealer position is now at {self.dealer_position}.\n")
 
     def start_game(self):
-        self.game_histories[self.game_id] = self.game_history
         self.game_id += 1
-        self.logging(f"Start Game #{self.game_id}\n")
-
         self.pot = 0
         self.current_highest_bet = 0
         
         self.deck = Deck()
         self.rotate_dealer()
-        self.community_cards = [TreysCard(x) for x in self.deck.draw(5)] #['back']*5, object class, not string
-        
         self.post_blinds()
-
+        
         players = list(self.players.values())
         for player in players:
             player.in_game = True
@@ -163,35 +158,37 @@ class Game:
             player.hand_str = [card.card_str for card in player.hand]
             player.hand_int = [card.card_int for card in player.hand]
         
-        self.logging(f"Each player has been dealt with a hand.\n")
+        self.community_cards = [TreysCard(x) for x in self.deck.draw(5)] #['back']*5, object class, not string
+        self.community_cards_str = [card.card_str for card in self.community_cards]
+        print(self.community_cards_str) #to be hidden
+
         self.game_state = 'pre-flop'
-        return
+        self.run_betting_round('pre-flop')
     
     def proceed_game(self):
         # Deal 5 community cards as an example
+        print("proceeding the game ...")
         if self.game_state == 'pre-flop':
             for i in range(3):
                 self.community_cards[i].flip()
-            self.logging(f"Flop Community cards: {[card for card in self.community_cards if card !='back']}\n")
+            self.logging(f"Flop Community cards\n")
             self.game_state = 'flop'
             self.run_betting_round('flop')
-            self.proceed_game()
+            #self.proceed_game()
 
         elif self.game_state == 'flop':
-            turn = self.community_cards[3]
-            turn.flip()
-            self.logging(f"Turn Community cards: {[card for card in self.community_cards if card !='back']}\n")
+            self.community_cards[3].flip()
+            self.logging(f"Turn Community cards\n")
             self.game_state = 'turn'
             self.run_betting_round('turn')
-            self.proceed_game()
+            #self.proceed_game()
 
         elif self.game_state == 'turn':
-            river = self.community_cards[4]
-            river.flip()
-            self.logging(f"River Community cards: {[card for card in self.community_cards]}\n")
+            self.community_cards[4].flip()
+            self.logging(f"River Community cards\n")
             self.game_state = 'river'
             self.run_betting_round('river')
-            self.proceed_game()
+            #self.proceed_game()
 
         elif self.game_state == 'river':
             self.logging(f"Showdown!\n")
@@ -233,7 +230,7 @@ class Game:
         self.logging("==========\n")
         self.logging('\n'.join(f"{player.name} left with {player.chips} chips." for player in self.players.values()))
         self.game_state = 'waiting'
-        self.players['Player 1'].query_action(self.game_analysis(), source = 'user')
+        #self.players['Player 1'].query_action(self.game_analysis(), source = 'user')
 
     def distribute_pots(self, player_scores):
         # Main pot distribution
@@ -276,38 +273,71 @@ class Game:
             hands.append([card.card_int for card in player.hand])
         #print(board, hands)
         summary += evaluator.hand_summary(board, hands)
-
+        self.game_histories[self.game_id] = self.game_history
+        
         print(summary)
         return summary
     
+    def get_next_player(self):
+        # Rotate the deque until you find an active player or return to the original position.
+        attempts = len(self.players_queue)
+        while attempts > 0:
+            player = self.players_queue.popleft()  # Remove the player from the front
+            self.players_queue.append(player)  # Add the player back to the end
+            if player.in_game:  # Check if the player is still active in the game
+                return player
+            attempts -= 1
+        return None  # Return None if no active players are found
+    
     def run_betting_round(self, stage):
-        players = list(self.players.values())
         print(f"Starting {stage} betting round.")
-        starting_position = (self.dealer_position + 3) % len(players)  # Betting starts left of the big blind
-        current_position = starting_position
+        initial_player_count = len(self.players_queue)
+        min_actions_required = initial_player_count
+        actions_taken = 0
 
-        active_betting = True
-        while active_betting:
-            print(f"Stage: {stage}, Current highest bet: {self.current_highest_bet}")
-            player = players[current_position]
-            action = ""
-            if player.in_game:
-                action = self.player_bet(player,)
-                if 'fold' in action:
-                    self.declare_winner()  # Only two players, other player wins
+        while actions_taken < min_actions_required or not self.bets_equalized():
+            player = self.get_next_player()
+            if not player.in_game:
+                continue  # Skip players who have folded or are all-in without further chips to bet
+
+            print(f"It's {player.name}'s turn to act.")
+            action = player.query_action()
+            print(f"Player {player.name}'s action: {action}")
+
+            if action == 'fold':
+                player.fold()
+                self.logging(f"{player.name} folds.")
+                if len(self.active_players()) == 1:
                     break
-            current_position = (current_position + 1) % len(players)
-            # Ensure the loop continues if there's an active raise or all-in that others need to respond to
-            if current_position == starting_position and action not in ['raise', 'allin']:
-                active_betting = False  # Ends the round if no new raise or all-in has occurred
+            elif action.startswith('call'):
+                self.handle_call(player)
+            elif action == 'check':
+                self.handle_check(player)
+            elif action == 'allin':
+                self.handle_all_in(player)
+            elif action.startswith('bet') or action.startswith('raise'):
+                if self.handle_bet_or_raise(player, action):
+                    min_actions_required += initial_player_count - 1  # Reset actions for others to respond to the raise
 
-    def player_bet(self, player,):
-        message = ""
+            actions_taken += 1
+
+    def bets_equalized(self):
+        """ Check if all active players have the same current bet or are all-in. """
+        highest_bet = max(player.current_bet for player in self.players_queue if player.in_game)
+        for player in self.players_queue:
+            if player.in_game and player.current_bet < highest_bet and not player.is_all_in:
+                return False
+        return True
+    
+    def run_betting_round11(self, stage): #only two players
         while True:
-            message += f"{self.game_history}\n\n{player.name}, do you want to (call)/(bet)/(fold)/(check)/(allin)? Current chips {player.chips}.\n"
-            
-            response = player.query_action(message, self.game_state, self.game_history, source = "game_engine")
-            action = player.action
+            player = self.get_next_player()
+            print(f"Starting {stage} betting round. it's player {player.name} turn to act.")
+            print(f"in game or not {self.players_queue[0].in_game}, {self.players_queue[1].in_game}")
+            print(f"waiting for {player.name} action ... ")
+
+            action = player.query_action()            
+            print(f"Player {player.name} action:{action}")
 
             if 'fold' in action:
                 player.fold()
@@ -321,7 +351,6 @@ class Game:
                         print(f"{player.name} calls {self.current_highest_bet}.")
                         self.pot += call_amount
                         self.logging(f"{player.name} calls. Pot size goes to {self.pot}.\n")
-                        break
                     else:
                         message = "Not enough chips to call."
                 else:
@@ -353,6 +382,7 @@ class Game:
                             self.pot += additional_bet
                             self.logging(f"{player.name} raises to {bet_amount}. Pot size goes up to {self.pot}.\n")
                             # After action, update and send game state
+                            active_betting = False
                             break
                         else:
                             message = "Not enough chips."
@@ -362,8 +392,12 @@ class Game:
                     message = "Please add a valid bet amount."
             else:
                 print(f"Invalid action: {action}")
-        return action
-    
+
+        active_players = [player for player in self.players.values() if player.in_game]
+        if len(active_players) == 1:
+            self.declare_winner()  # Only two players, other player wins            
+        self.proceed_game()
+
     def manage_side_pots(self, all_in_player):
         all_in_amount = all_in_player.current_bet
         excess_amount = 0
@@ -408,9 +442,7 @@ def cards_to_img(cards_list):
 
 if __name__ == '__main__':
 
-    eliza = LLMPlayer(1, 'Eliza', autobot=False)
-    human = Player(2, 'Human', autobot=True)
-    game = Game(eliza, human)
+    game = Game()
 
     game.start_game()
     game.proceed_game()
